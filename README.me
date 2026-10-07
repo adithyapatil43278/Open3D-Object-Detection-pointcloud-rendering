@@ -1,0 +1,148 @@
+# Object Detection AR-VR
+
+This project combines RGB-D reconstruction and 2D object detection to create a simple 3D scene with labeled object bounding boxes. It uses an RGB image, its aligned depth image, a YOLO model, and Open3D visualization.
+
+## Project Structure
+
+```text
+.
+├── backend/
+│   ├── bounding_box.py   # Converts detections and depth into 3D boxes
+│   ├── calibration.py    # Reads camera calibration from the terminal
+│   ├── detector.py       # Runs YOLO object detection
+│   ├── pointcloud.py     # Creates an RGB-D point cloud
+│   └── scene.py          # Main pipeline and Open3D visualizer
+├── data/
+│   ├── depth/01_LivingDepth.png
+│   └── rgb/01_LivingHigh.png
+├── models/yolo26n.pt       # Local model weights; not committed to Git
+├── calibration.txt
+└── README.me
+```
+
+`calibration.txt` contains the source/reference information for the TUM RGB-D calibration values. The application does not read this file automatically; calibration is entered interactively when the program starts.
+
+## How The Project Works
+
+The main entry point is `backend/scene.py`. Its processing flow is:
+
+1. The program asks for the RGB image dimensions, camera intrinsics, depth scale, and maximum depth.
+2. `pointcloud.py` reads the RGB and depth images and creates an Open3D RGB-D point cloud.
+3. `detector.py` loads `models/yolo26n.pt` and runs YOLO on the RGB image. Each detection contains:
+   - the detected class name;
+   - the confidence score;
+   - the 2D bounding box coordinates `[x1, y1, x2, y2]`.
+4. `bounding_box.py` extracts the depth pixels inside each 2D detection. Invalid depth values are discarded, and the lowest and highest 5 percent of valid depth values are removed as outliers.
+5. The remaining pixels are projected from image coordinates into 3D camera coordinates using:
+
+   ```text
+   z = depth / depth_scale
+   x = (u - cx) * z / fx
+   y = (v - cy) * z / fy
+   ```
+
+6. An axis-aligned Open3D bounding box is calculated around each 3D point set.
+7. `scene.py` displays the point cloud, red 3D bounding-box wireframes, yellow point-cloud text labels, and a coordinate frame in an Open3D window.
+
+The RGB and depth images must be aligned and must have matching dimensions for the 2D detections to map correctly to depth pixels.
+
+## Backend Files
+
+### `backend/calibration.py`
+
+Defines the `CameraCalibration` dataclass and the `get_calibration()` function. The function collects these values from the terminal:
+
+- `width`, `height`: image dimensions in pixels;
+- `fx`, `fy`: focal lengths;
+- `cx`, `cy`: principal point;
+- `depth_scale`: converts stored depth units to metres;
+- `depth_trunc`: maximum depth retained when creating the Open3D point cloud.
+
+The returned calibration object is passed to both the point-cloud and 3D bounding-box stages.
+
+### `backend/detector.py`
+
+Loads the YOLO model from `models/yolo26n.pt` and exposes `detect_objects(image_path)`. The confidence threshold is currently `0.1`. It returns a list of dictionaries with `class`, `confidence`, and `bbox` fields.
+
+### `backend/pointcloud.py`
+
+Exposes `create_point_cloud(rgb_path, depth_path, calibration)`. It creates Open3D camera intrinsics, loads both images, combines them into an RGB-D image, and converts that image into a 3D point cloud.
+
+### `backend/bounding_box.py`
+
+Exposes two main functions:
+
+- `bbox_to_3d_points(bbox, depth, calibration)`: clips a 2D box to the image, filters invalid and extreme depth values, and projects the remaining pixels into 3D points.
+- `create_3d_bounding_box(points)`: creates a red Open3D axis-aligned bounding box around the points.
+
+It also contains `create_object_boxes(rgb_path, depth_path, calibration)`, which runs detection and creates a 3D box for every detection with valid depth data.
+
+### `backend/scene.py`
+
+This is the executable application. It contains the configured RGB/depth paths, calls calibration, creates the point cloud and object boxes, converts boxes to red Open3D line sets, creates yellow point-cloud text labels, and opens the final visualization window.
+
+The current implementation uses script-style imports such as `from pointcloud import ...`, so it should be launched from the project root with the command shown below rather than as `python -m backend.scene`.
+
+## Setup
+
+The commands below are for Windows PowerShell. Open the terminal at the project root:
+
+```powershell
+cd "C:\Users\Adithya Patil\OneDrive\Desktop\Object detection AR-VR"
+```
+
+Create and activate a virtual environment:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks activation for the current user, run this once in an appropriate PowerShell session and then activate again:
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+```
+
+Install the required Python packages:
+
+```powershell
+python -m pip install --upgrade pip
+python -m pip install numpy opencv-python open3d pillow ultralytics
+```
+
+The project currently has no `requirements.txt`; the command above installs the packages imported by the backend.
+
+The YOLO weights in `models/` are intentionally excluded from Git because model files are large binary artifacts. After cloning the repository, place the required `yolo26n.pt` file at `models/yolo26n.pt` before running the project. The path is configured in `backend/detector.py`.
+
+## Run The Project
+
+Always run from the project root because the code uses relative paths for the model and image data:
+
+```powershell
+python backend/scene.py
+```
+
+When prompted, enter the calibration values. For the included 640 x 480 TUM-style data, the reference values are:
+
+```text
+RGB width       : 640
+RGB height      : 480
+fx              : 525.0
+fy              : 525.0
+cx              : 319.5
+cy              : 239.5
+Depth scale     : 5000.0
+Maximum depth   : 3.0
+```
+
+After detection and point-cloud creation finish, an Open3D window opens. Close that window to return to the terminal.
+
+## Troubleshooting
+
+- **Images or model are not found:** run the command from the project root, not from inside `backend`.
+- **No 3D box appears for a detection:** the detected region may contain no valid depth pixels, or the depth and RGB images may not be aligned.
+- **Point-cloud scale is incorrect:** verify the depth unit and `depth_scale`. A scale of `5000` means a stored depth value of `5000` represents 1 metre.
+- **The visualization window does not open:** check that Open3D is installed correctly and that the environment supports desktop GUI windows.
+- **Too many low-quality detections:** increase `CONFIDENCE_THRESHOLD` in `backend/detector.py` from its current value of `0.1`.
+- **Font error when adding labels:** `backend/scene.py` currently loads `arial.ttf`; install or provide that font if the label creation step reports that it cannot find the font.

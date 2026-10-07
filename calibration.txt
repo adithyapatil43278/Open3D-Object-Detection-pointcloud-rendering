@@ -1,0 +1,11 @@
+Calibration loaded:
+-------------------
+Resolution   : 640 x 480
+fx           : 525.0
+fy           : 525.0
+cx           : 319.5
+cy           : 239.5
+Depth scale  : 5000.0
+Depth trunc  : 3.0 m
+
+https://huggingface.co/datasets/voviktyl/TUM_RGBD-SLAM/tree/main/rgbd_dataset_freiburg1_desk?utm_source=chatgpt.com

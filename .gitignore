@@ -1,0 +1,42 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+env.bak/
+venv.bak/
+
+# Environment variables and local secrets
+.env
+.env.*
+!.env.example
+
+# Local logs and generated runtime output
+*.log
+output/
+outputs/
+runs/
+
+# ML model weights
+models/*.pt
+models/*.onnx
+
+# Jupyter and Python tooling state
+.ipynb_checkpoints/
+.python-version
+
+# IDE and editor settings
+.vscode/
+.idea/
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
